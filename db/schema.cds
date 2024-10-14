@@ -23,6 +23,7 @@ key purchaseEnquiryUuid  : UUID;
   status : String;
   NegoId : String;
   band : String;
+  comments : String;
   enquiryToFile : Composition of many Files on enquiryToFile.fileToEnquiry = $self;
   enquiryToPVehicle : Composition of many PurchareVehicle on enquiryToPVehicle.vehicleTopurchaseEnquiry = $self;
   enquiryToVehicle : Composition of many QuotationVehicle on enquiryToVehicle.vehicleToEnquiry = $self;
@@ -34,6 +35,7 @@ entity PurchareVehicle @(UI: {CreateHidden: true, DeleteHidden: true }) {
     vehicleCode : String;
     purchaseEnquiryUuid  : String;
     vehicleName : String;
+    Comments : String;
     vehicleColor : String;
     quantity : String;
     deliveryLocation : String;
@@ -124,9 +126,6 @@ entity SalesOrder {
   price : String;
   taxes : String;
   discount : String;
-  silver : String;
-  gold : String;
-  platinum : String;
 }
 
 entity PaymentDetails{
@@ -147,6 +146,18 @@ entity Stocks{
     quantity : String;
     pricePerUnit : String;
     tax : String;
+    silver : String;
+    gold : String;
+    platinum : String;
+}
+
+entity Comment{
+  key commentId : UUID;
+   purchaseEnquiryUuid  : String;
+  createdBy : String;
+  createdAt : String;
+  commentsText : String;
+  cmtToEnq: Association to many PurchaseEnquiry on cmtToEnq.purchaseEnquiryUuid = purchaseEnquiryUuid;
 }
 
 entity Files : managed {

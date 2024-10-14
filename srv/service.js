@@ -10,112 +10,107 @@ module.exports = async function (params, srv) {
 
     this.before('READ', [PurchareVehicle], async (req) => {
         debugger
+        const LoadingStatus = await SELECT.from(PurchaseEnquiry).where({ purchaseEnquiryUuid: req.data.purchaseEnquiryUuid });
+        if (LoadingStatus[0].status == 'Request') {
+            const vehicles = await SELECT.from(PurchareVehicle).where({ purchaseEnquiryUuid: req.data.purchaseEnquiryUuid });
+            // if(!vehicles[0].actualPrice){
+            for (const vehicle of vehicles) {
+                const stockData = await SELECT.one.from(Stocks).where({ vehicleCode: vehicle.vehicleCode });
+                if (stockData) {
+                    // Calculate the actual price based on quantity and stock price
+                    const quantity = parseInt(vehicle.quantity);
+                    if (quantity > 10) {
+                        vehicle.discount = stockData.gold;
+                    } else if (quantity > 5) {
+                        vehicle.discount = stockData.silver;
+                    } else if (quantity > 3) {
+                        vehicle.discount = stockData.platinum;
+                    } else {
+                        vehicle.discount = '0';
+                    }
+                    const actualPrice = parseFloat(stockData.pricePerUnit) * quantity;
+                    vehicle.actualPrice = actualPrice.toString();
 
-        const vehicles = await SELECT.from(PurchareVehicle);
-        for (const vehicle of vehicles) {
-            const stockData = await SELECT.one.from(Stocks).where({ vehicleCode: vehicle.vehicleCode });
-            if (stockData) {
-                // Calculate the actual price based on quantity and stock price
-                const quantity = parseInt(vehicle.quantity, 10); // Ensure quantity is an integer
-                const actualPrice = parseFloat(stockData.pricePerUnit) * quantity;
+                    if (vehicle.discount === '0') {
+                        vehicle.discountedPrice = actualPrice.toString();
+                    } else {
+                        vehicle.discountedPrice = actualPrice - (actualPrice * vehicle.discount / 100);
+                        vehicle.discountedPrice.toString();
+                    }
 
-                vehicle.actualPrice = actualPrice.toString(); // Set actual price
-                vehicle.discountedPrice = actualPrice.toString(); // Initially, discounted price is the same as actual price
+                    await cds.update(PurchareVehicle).set({
+                        actualPrice: vehicle.actualPrice,
+                        price: stockData.pricePerUnit.toString(),
+                        discount: vehicle.discount,
+                        discountedPrice: vehicle.discountedPrice.toString(),
+                        tax: stockData.tax.toString()
+                    }).where({ vehicleID: vehicle.vehicleID });
 
-                await cds.update(PurchareVehicle).set({
-                    actualPrice: vehicle.actualPrice,
-                    price: stockData.pricePerUnit.toString(),
-                }).where({ vehicleCode: vehicle.vehicleCode });
-
-            } else {
-                req.error(404, `Vehicle with code ${vehicle.vehicleCode} not found in stock.`);
+                } else {
+                    req.error(404, `Vehicle with code ${vehicle.vehicleCode} not found in stock.`);
+                }
             }
+            // }
         }
     });
 
-
-    this.on('UPDATE', PurchareVehicle.draft, async (req, next) => {
+    this.before('UPDATE', PurchareVehicle.draft, async (req) => {
         debugger;
-        if (!req.data.vehicleID && !req.data.discount) {
-            return next();
-        } else {
+        const LoadingStatus = await SELECT.from(PurchaseEnquiry).where({ purchaseEnquiryUuid: UUid });
+        if (LoadingStatus[0].status === 'Negotiation') {
             const { vehicleID, discount } = req.data;
-
-            // Validate discount if provided
             if (discount) {
-                if (discount < 0) {
-                    return req.reject(400, 'Discount cannot be negative');
+                if (discount < 0 || discount > 100 || /[a-zA-Z]/.test(discount)) {
+                    return req.reject(400, 'Discount cannot be negative or Discount must be below 100 or No alphabetic characters are allowed in the discount ');
                 }
-                if (discount > 100) {
-                    return req.reject(400, 'Discount must be below 100');
+
+                let Vehicle = await SELECT.one.from(PurchareVehicle.drafts).where({ vehicleID: vehicleID });
+                if (!Vehicle) {
+                    return req.reject(404, 'PurchareVehicle Vehicle record not found');
                 }
-                if (/[a-zA-Z]/.test(discount)) {
-                    return req.reject(400, 'No alphabetic characters are allowed in the discount');
-                }
+                const pricePerUnit = parseFloat(Vehicle.price);
+                const quantity = parseInt(Vehicle.quantity);
+                const discountValue = parseFloat(discount) || 0;
+                let discountedPrice = pricePerUnit;
+                discountedPrice = pricePerUnit - (pricePerUnit * discountValue / 100);
+
+                discountedPrice *= quantity;
+
+                await cds.update(PurchareVehicle.drafts).set({
+                    discountedPrice: discountedPrice.toString(),
+                    discount: discountValue.toString()
+                }).where({ vehicleID: vehicleID });
+
+                // await Calculate(Vehicle.purchaseEnquiryUuid);
             }
-
-            // Fetch the vehicle record
-            let Vehicle = await SELECT.one.from(PurchareVehicle.drafts).where({ vehicleID: vehicleID });
-
-            if (!Vehicle) {
-                return req.reject(404, 'PurchareVehicle Vehicle record not found');
-            }
-
-            const pricePerUnit = parseFloat(Vehicle.price);
-            const quantity = parseInt(Vehicle.quantity);
-
-            if (isNaN(pricePerUnit) || isNaN(quantity)) {
-                return req.reject(400, 'Invalid pricePerUnit or quantity');
-            }
-
-            const discountValue = parseFloat(discount) || 0;
-
-            let discountedPrice = pricePerUnit;
-
-            if (discountValue >= 0 && discountValue <= 100) {
-                discountedPrice -= (pricePerUnit * discountValue / 100);
-            }
-
-            discountedPrice *= quantity;
-
-            // Update the PurchareVehicle draft record
-            await cds.update(PurchareVehicle.drafts).set({
-                discountedPrice: discountedPrice.toString(),
-                discount: discountValue.toString()
-            }).where({ vehicleID: vehicleID });
-
-            // Call Calculate function to update PurchaseEnquiry
-            await Calculate(Vehicle.purchaseEnquiryUuid);
-            return next();
         }
     });
 
     async function Calculate(purchaseEnquiryUuid) {
         const vehicles = await SELECT.from(PurchareVehicle.drafts).where({ purchaseEnquiryUuid });
-    
+
         let totalPrice = 0;
         let totalTax = 0;
-    
+
         for (const vehicle of vehicles) {
-            const discountedPrice = parseFloat(vehicle.discountedPrice) || 0; // Ensure a fallback value
+            const discountedPrice = parseFloat(vehicle.discountedPrice) || 0;
             totalPrice += discountedPrice;
-    
+
             const price = parseFloat(vehicle.price);
             if (isNaN(price)) {
                 console.error('Invalid price for vehicle:', vehicle);
                 continue; // Skip this iteration if price is not valid
             }
-    
-            const tax = parseFloat(vehicle.tax) || 0; // Ensure a fallback value
-            const quantity = parseInt(vehicle.quantity) || 0; // Ensure a fallback value
-    
-            const taxAmount = (price * tax / 100) * quantity; // Calculate tax amount
+
+            const tax = parseFloat(vehicle.tax) || 0;
+            const quantity = parseInt(vehicle.quantity) || 0;
+
+            const taxAmount = (price * tax / 100) * quantity;
             totalTax += taxAmount;
         }
-    
+
         const grandTotal = totalPrice + totalTax;
-    
-        await cds.update(PurchaseEnquiry.drafts)
+        await cds.update(PurchaseEnquiry)
             .set({
                 totalPrice: totalPrice.toString(),
                 grandTotal: grandTotal.toString(),
@@ -123,8 +118,6 @@ module.exports = async function (params, srv) {
             })
             .where({ purchaseEnquiryUuid });
     }
-    
-    
 
     this.on('postattach', async (req) => {
         debugger
@@ -133,94 +126,145 @@ module.exports = async function (params, srv) {
             UUid = req.data.p;
             var status = await SELECT.from(PurchaseEnquiry).where({ purchaseEnquiryUuid: req.data.p });
             console.log("functionImport triggered");
-            if (status[0].status == 'Pending' || status[0].status == 'Nego') {
+            if (status[0].status == 'Request' || status[0].status == 'Negotiation') {
                 editbut = "true";
             }
-            return editbut,status;
+            return editbut, status;
         }
+    });
+
+    this.on('QuotationFunc', async (req) => {
+        debugger
+        var workflowContent = {
+            "context": {
+                "DocType": "AG",
+                "SalesOrg": "1000",
+                "DistChan": "10",
+                "Division": "00",
+                "qt_itemSet": [
+                    {
+                        "ItemNumber": "000010",
+                        "Material": "100-100",
+                        "Quantity": "100"
+                    }
+                ],
+                "qt_partnerSet": [
+                    {
+                        "PartRole": "AG",
+                        "PartNumber": "0000001000"
+                    }
+                ]
+            }
+        };
+        var TEST_DEST2 = await cds.connect.to("TEST_DEST1");
+        // var result1 = await TEST_DEST2.get(`/sap/opu/odata/sap/ZOD_PO_GENERATE_SRV/qt_headerSet('0020000172')?$expand=qt_itemSet,qt_partnerSet&$format=json`);
+        // var result1 = await TEST_DEST2.post(`/sap/opu/odata/sap/ZOD_PO_GENERATE_SRV/qt_headerSet`, workflowContent);
+        // console.log(result1);
     });
 
     this.before('UPDATE', PurchaseEnquiry, async (req) => {
         debugger;
-        //bypass handling
-        const vehicles1 = req.data.enquiryToPVehicle;
-        if (vehicles1) {
-            for (let vehicle of vehicles1) {
-                const { vehicleID, discount, discountedPrice } = vehicle;
+        if (req.data.status == 'Request' || req.data.status == 'Negotiation') {
+            debugger
+            const vehicles1 = req.data.enquiryToPVehicle;
+            if (vehicles1) {
+                for (let vehicle of vehicles1) {
+                    const { vehicleID, discount, discountedPrice, quantity } = vehicle;
+                    const stockData = await SELECT.one.from(Stocks).where({ vehicleCode: vehicle.vehicleCode });
 
-                const stockData = await SELECT.one.from(Stocks).where({ vehicleCode: vehicle.vehicleCode });
-                await cds.update(PurchareVehicle)
-                    .set({
-                        discount: discount,
-                        discountedPrice: discountedPrice,
-                        tax: stockData.tax.toString()
-                    })
-                    .where({ vehicleID: vehicleID });
+                    await cds.update(PurchareVehicle)
+                        .set({
+                            discount: req.data.discount,
+                            discountedPrice: discountedPrice,
+                            tax: stockData.tax.toString()
+                        })
+                        .where({ vehicleID: vehicleID });
+                }
             }
+            //totalprice and grand total and taxamount
+            let totalPrice = 0;
+            let totalTax = 0;
+            vehicles1.forEach(vehicle => {
+                if (vehicle.discount === '0' || vehicle.discount === '-' || vehicle.discount === null) {
+                    totalPrice += parseFloat(vehicle.actualPrice) || 0;
+                    const taxAmount = (parseFloat(vehicle.price) * (parseFloat(vehicle.tax) || 0) / 100) * (parseInt(vehicle.quantity) || 0);
+                    totalTax += taxAmount;
+                } else {
+                    totalPrice += parseFloat(vehicle.discountedPrice) || 0;
+                    const taxAmount = (parseFloat(vehicle.price) * (parseFloat(vehicle.tax) || 0) / 100) * (parseInt(vehicle.quantity) || 0);
+                    totalTax += taxAmount;
+                }
+            });
+            grandTotal = totalPrice + totalTax;
+
+            req.data.totalPrice = totalPrice.toString();
+            req.data.tax = totalTax.toString();
+            req.data.grandTotal = grandTotal.toString();
+
+            // const vehicles = req.data.enquiryToPVehicle;
+            // if (!vehicles || vehicles.length === 0) {
+            //     return req.reject(400, 'No vehicles found in the Purchase Enquiry.');
+            // }
+
+            // let insufficientStockMessages = [];
+            // for (let vehicle of vehicles) {
+            //     const { vehicleID, quantity, vehicleColor } = vehicle;
+
+            //     let purchaseVehicle = await SELECT.one.from(PurchareVehicle).where({ vehicleID: vehicleID });
+            //     if (!purchaseVehicle) {
+            //         insufficientStockMessages.push(`Quotation Vehicle record not found for Vehicle ID: ${vehicleID}`);
+            //         continue;
+            //     }
+
+            //     let stockData = await SELECT.one.from(Stocks).where({ vehicleCode: purchaseVehicle.vehicleCode });
+
+            //     if (!stockData) {
+            //         insufficientStockMessages.push(`Stock information not found for vehicle ${purchaseVehicle.vehicleName}`);
+            //         continue;
+            //     }
+
+            //     const stockQuantity = parseInt(stockData.quantity);
+            //     const requestedQuantity = parseInt(quantity || purchaseVehicle.quantity); // Use provided quantity or existing one
+            //     if (stockData.vehicleColor !== vehicleColor) {
+            //         insufficientStockMessages.push(`Color ${vehicleColor} is not available for vehicle ${purchaseVehicle.vehicleName}.`);
+            //     }
+            //     if (requestedQuantity > stockQuantity) {
+            //         insufficientStockMessages.push(`Insufficient stock for vehicle ${purchaseVehicle.vehicleName}. Available quantity: ${stockQuantity}, Requested quantity: ${requestedQuantity}`);
+            //     }
+            // }
+            // if (insufficientStockMessages.length > 0) {
+            //     // Use req.info to show the warning messages
+            //     // req.info(insufficientStockMessages.join('<br>'));
+            //     const warningMessage = `⚠️ Warning: The following issues were found:<br>${insufficientStockMessages.join('<br>')}`;
+            //     return req.reject(400, insufficientStockMessages.join('<br>'));
+            // }
+
         }
-        //totalprice and grand total and taxamount
-        let totalPrice = 0;
-        let totalTax = 0;
-        vehicles1.forEach(vehicle => {
-            if (vehicle.discount != '0' || vehicle.discount == null) {
-                totalPrice += parseFloat(vehicle.discountedPrice) || 0; 
-                const taxAmount = (parseFloat(vehicle.price) * (parseFloat(vehicle.tax) || 0) / 100) * (parseInt(vehicle.quantity) || 0);
-                totalTax += taxAmount;
-            } else {
-                totalPrice += parseFloat(vehicle.actualPrice) || 0; 
-                const taxAmount = (parseFloat(vehicle.price) * (parseFloat(vehicle.tax) || 0) / 100) * (parseInt(vehicle.quantity) || 0);
-                totalTax += taxAmount;
-            }
-        });
-        
+        if (req.data.comments !== null && req.data.comments !== '') {
+            debugger
+            const currentDateTime = new Date().toISOString().replace('T', ' ').split('.')[0];
 
-        var grandTotal = totalPrice + totalTax;
 
-        req.data.totalPrice = totalPrice.toString();
-        req.data.tax = totalTax.toString();
-        req.data.grandTotal = grandTotal.toString();
 
-        if (req.data.status == 'Pending' || req.data.status == 'Nego') {
-            const vehicles = req.data.enquiryToPVehicle;
-            if (!vehicles || vehicles.length === 0) {
-                return req.reject(400, 'No vehicles found in the Purchase Enquiry.');
+            debugger
+            const results = await SELECT.from(PurchaseEnquiry).columns('comments').where({ purchaseEnquiryUuid: req.data.purchaseEnquiryUuid });
+            debugger
+
+            if (results[0].comments != req.data.comments) {
+                await INSERT.into(Comment).entries({
+                    commentId: req.data.fileName,
+                    purchaseEnquiryUuid: req.data.purchaseEnquiryUuid,
+                    createdBy: req.headers["x-username"],
+                    createdAt: currentDateTime,
+                    commentsText: req.data.comments
+                });
             }
 
-            let insufficientStockMessages = [];
+            debugger
 
-            for (let vehicle of vehicles) {
-                const { vehicleID, quantity,vehicleColor } = vehicle;
-
-                let purchaseVehicle = await SELECT.one.from(PurchareVehicle).where({ vehicleID: vehicleID });
-                if (!purchaseVehicle) {
-                    insufficientStockMessages.push(`Quotation Vehicle record not found for Vehicle ID: ${vehicleID}`);
-                    continue;
-                }
-
-                
-                let stockData = await SELECT.one.from(Stocks).where({ vehicleCode: purchaseVehicle.vehicleCode });
-        
-                if (!stockData) {
-                    insufficientStockMessages.push(`Stock information not found for vehicle ${purchaseVehicle.vehicleName}`);
-                    continue;
-                }
-
-                const stockQuantity = parseInt(stockData.quantity);
-                const requestedQuantity = parseInt(quantity || purchaseVehicle.quantity); // Use provided quantity or existing one
-                if (stockData.vehicleColor !== vehicleColor) {
-                    insufficientStockMessages.push(`Color ${vehicleColor} is not available for vehicle ${purchaseVehicle.vehicleName}.`);
-                }
-                if (requestedQuantity > stockQuantity) {
-                    insufficientStockMessages.push(`Insufficient stock for vehicle ${purchaseVehicle.vehicleName}. Available quantity: ${stockQuantity}, Requested quantity: ${requestedQuantity}`);
-                }
-            }
-            if (insufficientStockMessages.length > 0) {
-                // Use req.info to show the warning messages
-                // req.info(insufficientStockMessages.join('<br>'));
-                const warningMessage = `⚠️ Warning: The following issues were found:<br>${insufficientStockMessages.join('<br>')}`;
-                return req.info(400, warningMessage);
-            }
         }
+
+
     });
 
 

@@ -58,6 +58,11 @@ annotate service.PurchaseEnquiry with @(
                 Value : poID,
                 Label : 'Parchase Order',
             },
+            {
+                $Type : 'UI.DataField',
+                Value : status,
+                Label : 'Status',
+            },
         ],
     },
     UI.Facets : [
@@ -75,7 +80,26 @@ annotate service.PurchaseEnquiry with @(
         },
         {
             $Type : 'UI.CollectionFacet',
-            Label : 'Qoutation Details',
+            Label : 'Quotation Details ',
+            ID : 'QoutationDetails',
+            Facets : [
+                {
+                    $Type : 'UI.ReferenceFacet',
+                    Label : 'Vehicle Details',
+                    ID : 'VehicleDetails2',
+                    Target : 'enquiryToPVehicle/@UI.LineItem#VehicleDetails1',
+                },
+                {
+                    $Type : 'UI.ReferenceFacet',
+                    Label : 'Price',
+                    ID : 'Pric',
+                    Target : '@UI.FieldGroup#Pric',
+                },
+            ],
+        },
+        {
+            $Type : 'UI.CollectionFacet',
+            Label : 'Quotation Details',
             ID : 'VehicleDetails',
             Facets : [
                 {
@@ -128,7 +152,7 @@ annotate service.PurchaseEnquiry with @(
                         {
                             Sign : #I,
                             Option : #EQ,
-                            Low : 'Pending',
+                            Low : 'Request',
                         },
                     ],
                 },
@@ -166,7 +190,7 @@ annotate service.PurchaseEnquiry with @(
                         {
                             Sign : #I,
                             Option : #EQ,
-                            Low : 'Pending',
+                            Low : 'In Process',
                         },
                     ],
                 },
@@ -204,7 +228,7 @@ annotate service.PurchaseEnquiry with @(
                         {
                             Sign : #I,
                             Option : #EQ,
-                            Low : 'Nego',
+                            Low : 'Negotiation',
                         },
                     ],
                 },
@@ -292,8 +316,32 @@ annotate service.PurchaseEnquiry with @(
             $Type : 'UI.DataField',
             Value : companyName,
         },
+        Description : {
+            $Type : 'UI.DataField',
+            Value : status,
+        },
     },
     UI.DeleteHidden : true,
+    UI.FieldGroup #Pric : {
+        $Type : 'UI.FieldGroupType',
+        Data : [
+            {
+                $Type : 'UI.DataField',
+                Value : totalPrice,
+                Label : 'Total Price',
+            },
+            {
+                $Type : 'UI.DataField',
+                Value : tax,
+                Label : 'Tax',
+            },
+            {
+                $Type : 'UI.DataField',
+                Value : grandTotal,
+                Label : 'Grand Total',
+            },
+        ],
+    },
 );
 
 annotate service.PurchareVehicle with @(
@@ -331,14 +379,51 @@ annotate service.PurchareVehicle with @(
         {
             $Type : 'UI.DataField',
             Value : discount,
-            Label : 'Discount In persent',
+            Label : 'Discount (%)',
         },
         {
             $Type : 'UI.DataField',
             Value : discountedPrice,
             Label : 'Discounted Price',
         },
-    ]
+    ],
+    UI.LineItem #VehicleDetails1 : [
+        {
+            $Type : 'UI.DataField',
+            Value : vehicleCode,
+            Label : 'Vehicle Code',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : vehicleName,
+            Label : 'Vehicle Name',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : vehicleColor,
+            Label : 'Vehicle Color',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : quantity,
+            Label : 'Quantity',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : price,
+            Label : 'Price Per Unit',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : actualPrice,
+            Label : 'Actual Price',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : discountedPrice,
+            Label : 'Discounted Price(%)',
+        },
+    ],
 );
 
 annotate service.PurchareVehicle with {
@@ -366,7 +451,9 @@ annotate service.PurchareVehicle with {
 };
 
 annotate service.PurchareVehicle with {
-    discountedPrice @Common.FieldControl : #ReadOnly
+    discountedPrice @(
+        Common.FieldControl : #ReadOnly,
+        )
 };
 
 annotate service.PurchaseEnquiry with {

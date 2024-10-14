@@ -160,8 +160,8 @@
                                             },
                                             "title": "UploadSet"
                                         },
-                                        "Comments": {
-                                            "template": "msales.ext.fragment.Comments",
+                                        "Commets": {
+                                            "template": "msales.ext.fragment.Commets",
                                             "position": {
                                                 "placement": "After",
                                                 "anchor": "UploadSet"
@@ -183,11 +183,26 @@
                                             }
                                         }
                                     }
+                                },
+                                "footer": {
+                                    "actions": {
+                                        "2": {
+                                            "press": "msales.ext.controller.Send.Send",
+                                            "visible": true,
+                                            "enabled": true,
+                                            "text": "Send "
+                                        }
+                                    }
                                 }
                             },
                             "variantManagement": "None",
                             "controlConfiguration": {
                                 "enquiryToPVehicle/@com.sap.vocabularies.UI.v1.LineItem#VehicleDetails": {
+                                    "tableSettings": {
+                                        "type": "GridTable"
+                                    }
+                                },
+                                "enquiryToPVehicle/@com.sap.vocabularies.UI.v1.LineItem#VehicleDetails1": {
                                     "tableSettings": {
                                         "type": "GridTable"
                                     }

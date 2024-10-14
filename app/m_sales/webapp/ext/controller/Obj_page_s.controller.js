@@ -13,13 +13,26 @@ sap.ui.define(['sap/ui/core/mvc/ControllerExtension'], function (ControllerExten
 				// you can access the Fiori elements extensionAPI via this.base.getExtensionAPI
 				var oModel = this.base.getExtensionAPI().getModel();
 			},
-			onAfterRendering:  async function (oParameter) {
-				debugger
+			editFlow: {
+				onAfterEdit: function (mParameters) {
+					debugger
+					setTimeout(async () => {
+						await this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[3].setVisible(false);
+						this.base.getView().mAggregations.content[0].mAggregations.sections[5].mAggregations._grid.mAggregations.content[0].mAggregations._grid.mAggregations.content[0].mAggregations.content.mAggregations.items[1].setEnabled(false);
+					}, 800);
+				},
+				onAfterSave: function (mParameters) {
+					debugger
+					setTimeout(async () => {
+						await this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[3].setVisible(true);
+						this.base.getView().mAggregations.content[0].mAggregations.sections[5].mAggregations._grid.mAggregations.content[0].mAggregations._grid.mAggregations.content[0].mAggregations.content.mAggregations.items[1].setEnabled(true);
+					}, 800);
+				}
 			},
 			routing: {
 				onAfterBinding: async function (oParameter) {
 					debugger
-					this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].mProperties.text = 'Raise Quotation';
+					// this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].mProperties.text = 'Raise Quotation';
 					
 					let funcname = 'postattach';
 					let oFunction = oParameter.getModel().bindContext(`/${funcname}(...)`);
@@ -36,36 +49,36 @@ sap.ui.define(['sap/ui/core/mvc/ControllerExtension'], function (ControllerExten
 					const oContext = oFunction.getBoundContext();
 					var result = oContext.getValue();
 					debugger
-					// if (result.value == 'false') {
-					// 	this.base.getView().getContent()[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].setEnabled(false);
-					// } else {
-					// 	this.base.getView().getContent()[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].setEnabled(true);
-					// }
+					if(result.value[0].status === 'Request'){
+						this.base.getView().getContent()[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].setEnabled(true);
+						var Quotation = this.base.getView().mAggregations.content[0].mAggregations.sections[3].setVisible(false);
+						var Quotation1 = this.base.getView().mAggregations.content[0].mAggregations.sections[2].setVisible(true);
+						this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[3].setVisible(true);
+						
 
-					// this.base.getView().mAggregations.content[0].mAggregations.sections[2].mForwardedAggregations.subSections[0].mAggregations._grid.mAggregations.content[1].mAggregations.content.mAggregations.content.mAggregations.columns[6].setVisible().mProperties.visible = false;
-					var discount = this.base.getView().mAggregations.content[0].mAggregations.sections[2].mForwardedAggregations.subSections[0].mAggregations._grid.mAggregations.content[1].mAggregations.content.mAggregations.content.mAggregations.columns[6].sId;
-					discount;
-					this.base.getView().mAggregations.content[0].mAggregations.sections[2].mForwardedAggregations.subSections[0].mAggregations._grid.mAggregations.content[1].mAggregations.content.mAggregations.content.mAggregations.columns[6].mAggregations.template.mAggregations.content.mAggregations.contentEdit[0].mProperties.enabled = false;
+					}else if(result.value[0].status === 'Negotiation'){
+						this.base.getView().getContent()[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].setEnabled(true);
+						var Quotation = this.base.getView().mAggregations.content[0].mAggregations.sections[3].setVisible(true);
+						var Quotation1 = this.base.getView().mAggregations.content[0].mAggregations.sections[2].setVisible(false);
+						this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[3].setVisible(true);
+			
 
 
-					// var sId;
-					// await this.base.getView().getContent()[0].getFooter().mAggregations.content.getContent().forEach(element => {
-					// 	// if(element.getText())
-					// 	debugger
-					// 	var text;
-					// 	try {
-					// 		text = element.getText()
-					// 	} catch (error) {
-					// 		text = null;
-					// 	}
-					// 	// var text =element.getText();
-					// 	if (text == 'Save')
-					// 		sId = element.sId;
-					// 	// element.setText("Send for Approval");
-					// });
-					// setTimeout(() => {
-					// 	sap.ui.getCore().byId(sId).setText("Send Quotation");
-					// }, 1000);
+					}else if (result.value[0].status === 'Approved'){
+						this.base.getView().getContent()[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].setEnabled(false);
+						var Quotation = this.base.getView().mAggregations.content[0].mAggregations.sections[3].setVisible(true);
+						var Quotation1 = this.base.getView().mAggregations.content[0].mAggregations.sections[2].setVisible(false);
+						this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[3].setVisible(false);
+						
+
+					}else if (result.value[0].status === 'In Process'){
+						this.base.getView().getContent()[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[2].setEnabled(false);
+						var Quotation = this.base.getView().mAggregations.content[0].mAggregations.sections[3].setVisible(false);
+						var Quotation1 = this.base.getView().mAggregations.content[0].mAggregations.sections[2].setVisible(true);
+						this.base.getView().mAggregations.content[0].mAggregations.headerTitle.mAggregations._actionsToolbar.mAggregations.content[3].setVisible(false);
+						
+		
+					}
 				},
 				onBeforeBinding: async function (oParameter) {
 					debugger
